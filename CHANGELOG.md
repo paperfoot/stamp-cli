@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.1 — 2026-09-11
+
+- Center circular and oval lettering by visible glyph bounds, with independent
+  English/Chinese tracking and protected gaps between upper and lower arcs.
+- Match font collection weights during measurement and rendering; outline
+  decorative florets so they remain visible without renderer font fallback.
+- Fit Chinese labels around center stars and inside ellipse boundaries; center
+  complete bilingual and legal-representative name/caption blocks.
+- Correct curved bilingual seal clearances and office-stamp line fitting.
+- Expand all signature layouts for tall cropped scans, rebalance frames with
+  hidden references, and prevent long labels from becoming microscopic.
+- Add rendered-pixel regressions for alignment, containment, missing glyphs,
+  clipping, spacing controls, and signature size preservation.
+
 ## 0.3.0 — 2026-09-11
 
 - Added the concise `stamp sign` workflow with classic, clean, and

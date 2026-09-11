@@ -7,7 +7,7 @@ from ...core.seal_layout import company_seal, rectangular_seal, RECT_PRESETS
 
 _DEFAULT_STAR = "❋"
 _DEFAULT_PRC_STAR_MM = 14.0
-_DEFAULT_EN_FS = 46
+_DEFAULT_EN_FS = 36
 _PRESET_IDS = list(RECT_PRESETS)
 
 class _HkOval:
@@ -66,9 +66,21 @@ class _HkOval:
             name="zh_font", type=str, default="song",
             help="Font alias for the Chinese text (default Songti SC).",
         ),
+        ParamSpec(name="en_size", type=int, default=0,
+                  help="Maximum English arc size (0 = 36 units; fitted to available space)."),
+        ParamSpec(name="en_spacing", type=float, default=None,
+                  help="English letter spacing in viewBox units (0–12; default 1.5)."),
+        ParamSpec(name="zh_size", type=int, default=0,
+                  help="Maximum size of each Chinese line (0 = 44 units)."),
+        ParamSpec(name="zh_spacing", type=float, default=1.0,
+                  help="Chinese letter spacing in viewBox units (0–12; default 1)."),
     ]
 
     DEFAULTS = {
+        "zh_spacing": 1.0,
+        "en_size": 0,
+        "en_spacing": None,
+        "zh_size": 0,
         "en": "",
         "zh_line1": "",
         "zh_line2": "",

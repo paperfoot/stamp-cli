@@ -46,7 +46,7 @@ from ...core.fonts import LATIN_ALIASES, FontMissingError, default_resolver
 from ..base import ParamSpec, StyleMeta, StyleResult
 
 # Bump when geometry/defaults change in a way that would alter golden output.
-_VERSION = "2"
+_VERSION = "3"
 _ID_VERSION = "1"  # Layout revisions must not renumber an unchanged image mark.
 
 # ── Fixed canvas + layout (SVG units; physical ~60×29 mm at the canonical scale)
@@ -78,58 +78,9 @@ _HEX32 = re.compile(r"[0-9A-F]{32}")
 
 
 # ── Text fitting ───────────────────────────────────────────────────────────
-def _is_wide(ch: str) -> bool:
-    """True for full-width (CJK/fullwidth/kana) glyphs that advance ~1em."""
-    o = ord(ch)
-    return (
-        0x1100 <= o <= 0x115F or 0x2E80 <= o <= 0xA4CF or 0xAC00 <= o <= 0xD7A3
-        or 0xF900 <= o <= 0xFAFF or 0xFE30 <= o <= 0xFE4F or 0xFF00 <= o <= 0xFF60
-    )
-
-
 def _has_non_latin(text: str) -> bool:
     """True if any char is outside the Latin/punctuation range a Latin face covers."""
     return any(ord(c) > 0x2E7F for c in text)
-
-
-def _est_w(text: str, size: float, ls: float = 0.0) -> float:
-    """Estimate the rendered advance of ``text`` at ``size``.
-
-    Full-width glyphs count ~1.0em, Latin ~0.62em, so a wide (e.g. CJK) label is
-    actually shrunk to fit rather than under-measured and left to overflow.
-    """
-    if not text:
-        return 0.0
-    width = sum((1.0 if _is_wide(ch) else 0.62) * size for ch in text)
-    return width + ls * (len(text) - 1)
-
-
-def _fit(text: str, size: int, max_w: float, *, floor: int, ls: float = 0.0) -> int:
-    """Largest integer size ≤ ``size`` whose estimated width fits ``max_w``.
-
-    Shrinks to ``floor``, then — so an over-long label can never bleed off the
-    badge — drops below the floor to a hard minimum of 4 if it still overflows.
-    """
-    s = int(size)
-    while s > floor and _est_w(text, s, ls) > max_w:
-        s -= 1
-    while s > 4 and _est_w(text, s, ls) > max_w:
-        s -= 1
-    return s
-
-
-def _fit_cursive(name: str) -> int:
-    """Cursive point size stepped down by name length (ints → stable bytes)."""
-    n = len(name)
-    if n <= 8:
-        return 48
-    if n <= 14:
-        return 38
-    if n <= 22:
-        return 30
-    if n <= 32:
-        return 24
-    return 20
 
 
 # ── Signature image handling ────────────────────────────────────────────────
@@ -410,6 +361,9 @@ class _EsignSignature:
             raise ValueError("A typed signature needs a non-empty --name.")
         band = ((_BAND_X, _BAND_Y, _BAND_W, _BAND_H) if layout == "classic"
                 else ((18, 12, 384, 116) if layout == "signature-only" else (18, 44, 384, 92)))
+        if layout == 'classic' and not p['show_id']:
+            # Reclaim the hidden reference zone and rebalance the visible ink.
+            band = (*band[:3], 128.)
         extra_height = 0.
         accent = colors_mod.parse(str(p["color"]))
 
@@ -486,11 +440,11 @@ class _EsignSignature:
             if res is None:
                 raise ValueError("signature image is blank after white-knockout.")
             png_bytes, image_px, content_tag = res
-            if layout == "classic":
-                # Preserve the ink's width: let the frame grow for a taller mark.
-                ink_height = max(_BAND_H, min(240., _BAND_W * image_px[1] / image_px[0]))
-                extra_height = ink_height - _BAND_H
-                band = (_BAND_X, _BAND_Y, _BAND_W, ink_height)
+            # All layouts expand for a taller mark. Preserve aspect ratio and
+            # cap the height so a portrait scan cannot create an enormous page.
+            ink_height = max(band[3], min(240., band[2] * image_px[1] / image_px[0]))
+            extra_height = ink_height - band[3]
+            band = (*band[:3], ink_height)
             if max(image_px) < 300:
                 warnings.append("Small signature image; a higher-resolution scan will print more sharply.")
             b64 = base64.b64encode(png_bytes).decode("ascii")
@@ -526,7 +480,9 @@ class _EsignSignature:
         # non-Latin glyph would render as tofu. Pin a CJK face so resvg can
         # glyph-fall-back across font_files (same trick western.text/hk.oval use).
         # Conditional, so the common ASCII path stays lean and dependency-free.
-        need_cjk = _has_non_latin(label) or (mode == "typed" and _has_non_latin(name))
+        need_cjk = ((layout != 'signature-only' and _has_non_latin(label))
+                    or ((mode == 'typed' or (layout == 'clean' and p['show_name']))
+                        and _has_non_latin(name)))
         if need_cjk:
             cjk_prof = default_resolver.first_available(("song", "hei", "ping", "hiragino"))
             if cjk_prof is None:
@@ -546,42 +502,36 @@ class _EsignSignature:
             )
         bracket_svg = _bracket(bracket, accent, extra_height)
 
-        lab_size = _fit(label, _LAB_SIZE, _CONTENT_W, floor=9)
-        label_svg = "" if not label else (
-            f'<text x="{n(_CONTENT_X)}" y="{n(_Y_LABEL)}" '
-            f'font-family="{svg.esc_attr(sans_family)}" font-weight="700" '
-            f'font-size="{n(lab_size)}" fill="{accent}">{svg.esc(label)}</text>'
-        )
-
-        id_size = _fit(sig_id, _ID_SIZE, _CONTENT_W, floor=8, ls=_ID_LS)
-        id_svg = (
-            f'<text x="{n(_CONTENT_X)}" y="{n(_Y_ID + extra_height)}" '
-            f'font-family="{svg.esc_attr(sans_family)}" font-weight="400" '
-            f'font-size="{n(id_size)}" letter-spacing="{n(_ID_LS)}" '
-            f'fill="{accent}">{svg.esc(sig_id)}</text>'
-        )
-
-        id_svg, _ = fitted_text(sig_id, [prof], (_CONTENT_X, 161 + extra_height, _CONTENT_W, 29),
-                                size=20, minimum=17, color=accent)
-        if not p["show_id"]:
-            id_svg = ""
+        label_svg = id_svg = ''
+        if layout == 'classic':
+            label_svg, _ = fitted_text(label, fonts_used,
+                                       (_CONTENT_X, 21, _CONTENT_W, 21),
+                                       size=18, minimum=11, color=accent)
+            if p['show_id']:
+                id_svg, _ = fitted_text(sig_id, [prof],
+                                        (_CONTENT_X, 161 + extra_height, _CONTENT_W, 29),
+                                        size=20, minimum=17, color=accent)
         view_box = (0., 0., _W, _H + extra_height)
         physical_size = (60.0, 60.0 * view_box[3] / _W)
         if layout == "clean":
             bracket_svg = ""
+            # Expanded scans fill their band vertically; keep the divider as
+            # far from the ink as the top label, rather than crowding the tail.
+            footer_shift = extra_height + (12 if extra_height else 0)
+            view_box = (0., 0., _W, _H + footer_shift)
             label_svg, _ = fitted_text(label, fonts_used, (18, 10, 384, 23), size=15,
                                        minimum=11, color=accent)
             printed, _ = fitted_text(name if p["show_name"] else "", fonts_used,
-                                     (18, 151, 384, 22), size=18, minimum=14, color=accent)
-            rule = '<path d="M 18 141 H 402" stroke="#B9BDC0" stroke-width="0.7"/>' if p["show_name"] else ""
+                                     (18, 151 + footer_shift, 384, 22), size=18, minimum=14, color=accent)
+            rule = f'<path d="M 18 {n(141 + footer_shift)} H 402" stroke="#B9BDC0" stroke-width="0.7"/>' if p["show_name"] else ""
             label_svg += rule + printed
             id_svg, _ = fitted_text(sig_id if p["show_id"] else "", [prof],
-                                    (18, 181, 384, 12), size=10, minimum=9, color=accent)
-            physical_size = (70.0, 70.0 * _H / _W)
+                                    (18, 181 + footer_shift, 384, 12), size=10, minimum=9, color=accent)
+            physical_size = (70.0, 70.0 * view_box[3] / _W)
         elif layout == "signature-only":
             bracket_svg = label_svg = id_svg = ""
-            view_box = (0., 0., _W, 140.)
-            physical_size = (60., 20.)
+            view_box = (0., 0., _W, 140. + extra_height)
+            physical_size = (60., 60. * view_box[3] / _W)
 
         svg_doc = (
             svg.svg_root(width=view_box[2], height=view_box[3], view_box_tuple=view_box)

@@ -41,10 +41,12 @@ from ..base import ParamSpec, StyleMeta, StyleResult
 from ...core import colors as colors_mod
 from ...core import svg
 from ...core.fonts import default_resolver
+from ...core.text import fitted_block, weighted_font
+from ...core.seal_layout import arc_text
 
 # Style schema version. Bump when geometry/defaults change in a way that would
 # alter golden-hash output.
-_VERSION = "1"
+_VERSION = "2"
 
 # ── Canonical geometry (10 units = 1 mm) ──────────────────────────────────────
 # 45 mm × 30 mm seal → outer ellipse rx=225 ry=150 about a centre, with a 1 mm
@@ -240,11 +242,11 @@ class _PrcForeignInvestedOval:
         fill = colors_mod.parse(str(p["color"]))
 
         # ── Fonts ────────────────────────────────────────────────────────────
-        zh_prof = default_resolver.resolve(str(p["zh_font"]))
+        zh_prof = weighted_font(default_resolver.resolve(str(p["zh_font"])), weight)
         fonts_used = [zh_prof]
         en_prof = None
         if english:
-            en_prof = default_resolver.resolve(str(p["en_font"]))
+            en_prof = weighted_font(default_resolver.resolve(str(p["en_font"])), weight)
             fonts_used.append(en_prof)
         if not zh_prof.supports_cjk:
             warnings.append(
@@ -290,50 +292,19 @@ class _PrcForeignInvestedOval:
         body = ""
 
         if layout == "curved":
-            # ── 环行: name along the TOP arc; English along the BOTTOM arc. ───
-            name_fs = _curved_zh_size(len(name))
-            # TOP text path: start at bottom, sweep CW (flag 1) → text centres up.
-            top_path = (
-                f'<path id="fio-top" d="M {n(_CX)},{n(_CY + _TOP_RY)} '
-                f'a {n(_TOP_RX)},{n(_TOP_RY)} 0 0,1 -{n(_TOP_RX)},-{n(_TOP_RY)} '
-                f'a {n(_TOP_RX)},{n(_TOP_RY)} 0 0,1 {n(_TOP_RX)},-{n(_TOP_RY)} '
-                f'a {n(_TOP_RX)},{n(_TOP_RY)} 0 0,1 {n(_TOP_RX)},{n(_TOP_RY)} '
-                f'a {n(_TOP_RX)},{n(_TOP_RY)} 0 0,1 -{n(_TOP_RX)},{n(_TOP_RY)} z"/>'
-            )
-            defs_paths = top_path
-            # Modest CJK letter-spacing: enough to breathe, tight enough that the
-            # name stays in the shallow top band instead of wrapping into the sides.
-            name_text = (
-                f'<g font-weight="{weight}" '
-                f'font-family="{svg.esc_attr(zh_family)}" '
-                f'font-size="{n(name_fs)}" letter-spacing="{n(name_fs * 0.08)}" '
-                f'fill="{fill}">'
-                f'<text><textPath startOffset="50%" text-anchor="middle" '
-                f'href="#fio-top">{svg.esc(name)}</textPath></text></g>'
-            )
-            body = name_text
-
+            # Both runs use the same visible-ink ellipse, rather than giving
+            # top and bottom text the same baseline and unequal border gaps.
+            body, zh1_fs_out = arc_text(
+                name, [zh_prof], _CX, _CY, _TOP_RX, _TOP_RY,
+                ink=fill, size=_curved_zh_size(len(name)), key='fio-top',
+                spacing=2, band_width=62, sweep=176)
+            zh2_fs_out = en_fs_out = 0.
             if english:
-                en_fs = _en_size(len(english))
-                # BOTTOM path: start at top, sweep CCW (flag 0) → text centres down.
-                bot_path = (
-                    f'<path id="fio-bot" d="M {n(_CX)},{n(_CY - _BOT_RY)} '
-                    f'a {n(_BOT_RX)},{n(_BOT_RY)} 0 0,0 -{n(_BOT_RX)},{n(_BOT_RY)} '
-                    f'a {n(_BOT_RX)},{n(_BOT_RY)} 0 0,0 {n(_BOT_RX)},{n(_BOT_RY)} '
-                    f'a {n(_BOT_RX)},{n(_BOT_RY)} 0 0,0 {n(_BOT_RX)},-{n(_BOT_RY)} '
-                    f'a {n(_BOT_RX)},{n(_BOT_RY)} 0 0,0 -{n(_BOT_RX)},-{n(_BOT_RY)} z"/>'
-                )
-                defs_paths += bot_path
-                body += (
-                    f'<g font-weight="{weight}" '
-                    f'font-family="{svg.esc_attr(en_family)}" '
-                    f'font-size="{n(en_fs)}" fill="{fill}">'
-                    f'<text><textPath startOffset="50%" text-anchor="middle" '
-                    f'href="#fio-bot">{svg.esc(english)}</textPath></text></g>'
-                )
-            zh1_fs_out = name_fs
-            zh2_fs_out = 0.0
-            en_fs_out = _en_size(len(english)) if english else 0.0
+                bottom, en_fs_out = arc_text(
+                    english, [en_prof], _CX, _CY, _BOT_RX, _BOT_RY,
+                    ink=fill, size=_en_size(len(english)), key='fio-bot',
+                    bottom=True, spacing=1.5, band_width=62, sweep=176)
+                body += bottom
 
         else:
             # ── 横排: one/two centred horizontal CJK lines + optional English. ─
@@ -342,43 +313,20 @@ class _PrcForeignInvestedOval:
             zh2_fs = _zh_size(len(name2)) if two else 0.0
             en_fs = _en_size(len(english)) if english else 0.0
 
-            # Vertical layout: stack name (1 or 2 lines) centred, English below.
-            # Baselines are placed about the centre so the block is balanced.
-            lines: list[tuple[str, float, float]] = []  # (text, font_size, y)
+            # Fit the complete bilingual block to a rectangle safely inside
+            # the ellipse. Visible ink, rather than nominal baselines, is centred.
+            block_lines = [(name, [zh_prof], zh1_fs, 1.5)]
             if two:
-                gap = max(zh1_fs, zh2_fs) * 1.08
-                y1 = _CY - gap / 2 + zh1_fs * 0.35
-                y2 = _CY + gap / 2 + zh2_fs * 0.35
-                lines.append((name, zh1_fs, y1))
-                lines.append((name2, zh2_fs, y2))
-            else:
-                lines.append((name, zh1_fs, _CY + zh1_fs * 0.35))
-
-            tspans = "".join(
-                f'<tspan font-size="{n(fs)}" x="{n(_CX)}" y="{n(y)}">'
-                f'{svg.esc(txt)}</tspan>'
-                for txt, fs, y in lines
-            )
-            body = (
-                f'<g font-weight="{weight}" '
-                f'font-family="{svg.esc_attr(zh_family)}" fill="{fill}">'
-                f'<text font-size="0" text-anchor="middle">{tspans}</text></g>'
-            )
-
+                block_lines.append((name2, [zh_prof], zh2_fs, 1.5))
             if english:
-                # Place English under the name block, inside the ring.
-                lowest = max(y for _t, _f, y in lines)
-                en_y = lowest + en_fs * 1.25
-                en_y = min(en_y, _CY + _INNER_RY - en_fs * 0.7)
-                body += (
-                    f'<g font-weight="{weight}" '
-                    f'font-family="{svg.esc_attr(en_family)}" fill="{fill}">'
-                    f'<text font-size="{n(en_fs)}" x="{n(_CX)}" y="{n(en_y)}" '
-                    f'text-anchor="middle">{svg.esc(english)}</text></g>'
-                )
-            zh1_fs_out = zh1_fs
-            zh2_fs_out = zh2_fs
-            en_fs_out = en_fs
+                block_lines.append((english, [en_prof], en_fs, .8))
+            body, sizes = fitted_block(block_lines,
+                                       (_CX - 176, _CY - 82, 352, 164),
+                                       gap=14, minimum=14, color=fill,
+                                       ellipse=(_CX, _CY, _INNER_RX - 10, _INNER_RY - 10))
+            zh1_fs_out = sizes[0]
+            zh2_fs_out = sizes[1] if two else 0.
+            en_fs_out = sizes[-1] if english else 0.
 
         svg_doc = (
             svg.svg_root(width=_VB_W, height=_VB_H, view_box_tuple=_VIEW_BOX)

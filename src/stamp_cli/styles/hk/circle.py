@@ -7,7 +7,7 @@ from ...core.seal_layout import company_seal, rectangular_seal, RECT_PRESETS
 
 _DEFAULT_STAR = "❋"
 _DEFAULT_PRC_STAR_MM = 14.0
-_DEFAULT_EN_FS = 46
+_DEFAULT_EN_FS = 36
 _PRESET_IDS = list(RECT_PRESETS)
 
 class _HkCircle:
@@ -78,7 +78,7 @@ class _HkCircle:
         ParamSpec(
             name="font_size", type=int, default=_DEFAULT_EN_FS,
             help="Maximum English arc font size "
-                 "(default 46).",
+                 "(default 36).",
         ),
         ParamSpec(
             name="en_font", type=str, default="sans",
@@ -97,18 +97,23 @@ class _HkCircle:
         ),
         ParamSpec(
             name="en_spacing", type=float, default=None,
-            help="Override English letter-spacing in viewBox units "
-                 "(unset = 0; the name scales down for "
-                 "long names).",
+            help="English letter spacing in viewBox units (0–12; "
+                 "default 1.5). In a 42mm stamp, 1 unit is 0.1mm.",
         ),
         ParamSpec(
             name="zh_size", type=int, default=0,
             help="Force BOTH Chinese lines to this font size (0 = auto per "
                  "line). Use to make the two lines the same size.",
         ),
+        ParamSpec(name="zh_spacing", type=float, default=1.0,
+                  help="Chinese letter spacing in viewBox units (0–12; default 1)."),
+        ParamSpec(name="en_bottom_spacing", type=float, default=None,
+                  help="Bottom English letter spacing (0–12; default follows --en-spacing)."),
     ]
 
     DEFAULTS = {
+        "en_bottom_spacing": None,
+        "zh_spacing": 1.0,
         "en": "",
         "zh_line1": "",
         "zh_line2": "",

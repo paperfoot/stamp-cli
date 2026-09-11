@@ -1,6 +1,6 @@
 [project]
 name = "stamp-cli"
-version = "0.3.0"
+version = "0.3.1"
 description = "Generate Chinese, Hong Kong, and Western-style stamps (round seals, name chops, sign chops, rectangular stamps) with Unicode support, custom colors, fonts, and transparent backgrounds."
 readme = "README.md"
 authors = [{ name = "Paperfoot" }]

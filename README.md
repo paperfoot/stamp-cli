@@ -12,7 +12,7 @@ and signatures. These are graphic templates; the tool does not register or certi
 Install the tagged release with [uv's tool installer](https://docs.astral.sh/uv/guides/tools/):
 
 ```bash
-uv tool install 'git+https://github.com/paperfoot/stamp-cli@v0.3.0'
+uv tool install 'git+https://github.com/paperfoot/stamp-cli@v0.3.1'
 stamp --help
 ```
 
@@ -35,8 +35,8 @@ stamp sign --name 'Alex Morgan' -o signature.png
 ```
 
 Use a scan or photograph by passing its path. Blank surrounding pixels and
-white paper are removed; a classic frame grows when the remaining ink is tall,
-so the signature is not squeezed:
+white paper are removed. Every layout grows when the remaining ink is tall,
+within a bounded height, while preserving its aspect ratio:
 
 ```bash
 stamp sign --name 'Alex Morgan' --signature ./signature-scan.png -o signature.png
@@ -91,6 +91,28 @@ stamp validate --style hk.oval --params params.json --json
 Unknown parameters, invalid types, and missing required values are reported as
 errors. `agent-info` is generated from the same style definitions used by the
 CLI, so its parameter schema and defaults stay aligned with rendering.
+
+## Seal typography
+
+Circular and oval company seals center the visible letter shapes between their
+rings. English follows a measured arc without squeezing letters horizontally;
+Chinese lines fit inside the actual inner circle or ellipse.
+
+Control tracking independently for English and Chinese:
+
+```bash
+stamp hk circle --en 'EXAMPLE COMPANY LIMITED' --zh-line1 '示例有限公司' \
+  --en-spacing 2 --zh-spacing 1.5 --no-star -o company-seal.png
+```
+
+`--en-spacing` defaults to 1.5 and `--zh-spacing` to 1. Both accept 0–12;
+zero explicitly removes added tracking. At the default 42 mm circular size,
+one unit is 0.1 mm. An optional `--en-bottom-spacing` sets the circular seal's
+lower English arc separately; otherwise it inherits `--en-spacing`.
+
+`--en-size` and `--zh-size` set maximum font sizes. Text reduces only as needed
+to fit; inputs that cannot remain legible produce an actionable error. A
+center star reserves its own space, including clearance to the Chinese lines.
 
 ## Export controls
 
@@ -158,7 +180,7 @@ stamp fonts --fetch
 
 Signatures, Hong Kong seals, and personal name chops use measured glyph bounds from
 [Pillow `ImageFont.getbbox`](https://pillow.readthedocs.io/en/stable/reference/ImageFont.html#PIL.ImageFont.FreeTypeFont.getbbox)
-to fit variable text, and writes PNG print resolution using Pillow's documented
+to fit variable text. PNG export writes print resolution using Pillow's documented
 [PNG `dpi` option](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#png).
 
 ## Errors and automation

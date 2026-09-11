@@ -41,10 +41,11 @@ from ..base import ParamSpec, StyleMeta, StyleResult
 from ...core import colors as colors_mod
 from ...core import svg
 from ...core.fonts import default_resolver
+from ...core.text import fitted_block, weighted_font
 
 # Style schema version. Bump when geometry/defaults change in a way that would
 # alter golden-hash output.
-_VERSION = "1"
+_VERSION = "2"
 
 # Square viewBox + centre, matching STAMP4U's buildSquareSvg convention.
 _VIEW_BOX: tuple[float, float, float, float] = (0.0, 0.0, 160.0, 160.0)
@@ -61,13 +62,6 @@ _DEFAULT_LABEL = "专用章"
 # gap so neighbouring characters never touch — 0.78 reads dense-but-separated
 # like a carved chop.
 _GLYPH_FILL = 0.78
-
-# resvg's support for dominant-baseline="central" is "minimal" (PLAN.md §5): for
-# CJK glyphs it places the visual centre ~0.11·font-size *below* the requested y.
-# We lift each baseline by this fraction of the glyph size so text sits optically
-# centred. Determined by the render self-check, not theory.
-_CENTRAL_LIFT = 0.11
-
 
 def _name_font_size(n_cols: int, n_rows: int, region_w: float, region_h: float) -> float:
     """Point size for each name glyph, fit to the available name region.
@@ -184,7 +178,7 @@ class _PrcLegalRep:
         fill = colors_mod.parse(str(p["color"]))
 
         # ── Fonts ─────────────────────────────────────────────────────────────
-        zh_prof = default_resolver.resolve(str(p["zh_font"]))
+        zh_prof = weighted_font(default_resolver.resolve(str(p["zh_font"])), weight)
         fonts_used = [zh_prof]
         if not zh_prof.supports_cjk:
             warnings.append(
@@ -211,7 +205,6 @@ class _PrcLegalRep:
         name_top = inner_top + star_band
         name_bottom = inner_bottom - label_band
         name_cx = (inner_left + inner_right) / 2.0
-        name_cy = (name_top + name_bottom) / 2.0
         name_w = inner_right - inner_left
 
         # ── Name grid geometry ────────────────────────────────────────────────
@@ -230,19 +223,6 @@ class _PrcLegalRep:
         name_h = name_bottom - name_top
         name_fs = _name_font_size(n_cols, n_rows, name_w, name_h)
 
-        # Cell centres: evenly distribute columns across the name width, rows
-        # across the name height.
-        if n_cols == 1:
-            col_xs = [name_cx]
-        else:
-            step = name_w / n_cols
-            col_xs = [inner_left + step * (i + 0.5) for i in range(n_cols)]
-        if n_rows == 1:
-            row_ys = [name_cy]
-        else:
-            rh = (name_bottom - name_top) / n_rows
-            row_ys = [name_top + rh * (i + 0.5) for i in range(n_rows)]
-
         nm = svg.num
 
         # ── Frame (single square band) ────────────────────────────────────────
@@ -259,49 +239,20 @@ class _PrcLegalRep:
             star_cy = inner_top + star_r
             star_svg = _star_polygon(name_cx, star_cy, star_r, fill)
 
-        # ── Name glyphs ───────────────────────────────────────────────────────
-        # Each glyph is its own centred <text>; dominant-baseline=central keeps
-        # it vertically centred in its cell (resvg's central support is limited
-        # but adequate for single glyphs — verified by render self-check).
-        name_cells = ""
-        for r_i, row in enumerate(rows):
-            n_in_row = len(row)
-            if n_in_row == n_cols:
-                xs = col_xs
-            else:
-                # A short final row (shouldn't happen with our split, but be safe)
-                # is centred across the same width.
-                step = name_w / n_in_row
-                xs = [inner_left + step * (i + 0.5) for i in range(n_in_row)]
-            glyph_y = row_ys[r_i] - name_fs * _CENTRAL_LIFT
-            for c_i, ch in enumerate(row):
-                name_cells += (
-                    f'<text x="{nm(xs[c_i])}" y="{nm(glyph_y)}" '
-                    f'font-size="{nm(name_fs)}" text-anchor="middle" '
-                    f'dominant-baseline="central">{svg.esc(ch)}</text>'
-                )
-        name_group = (
-            f'<g font-weight="{weight}" '
-            f'font-family="{svg.esc_attr(zh_family)}" fill="{fill}">'
-            f'{name_cells}</g>'
-        )
-
-        # ── Label band (optional) ─────────────────────────────────────────────
-        label_group = ""
+        # Centre the full visible name/caption block, not separately estimated
+        # baselines. A star owns its own strip above the text when enabled.
+        block_lines = [(''.join(row), [zh_prof], name_fs, name_fs * .12) for row in rows]
         if label:
-            label_y = name_bottom + label_band / 2.0 - label_fs * _CENTRAL_LIFT
-            label_group = (
-                f'<g font-weight="{weight}" '
-                f'font-family="{svg.esc_attr(zh_family)}" fill="{fill}">'
-                f'<text x="{nm(name_cx)}" y="{nm(label_y)}" '
-                f'font-size="{nm(label_fs)}" text-anchor="middle" '
-                f'dominant-baseline="central" '
-                f'letter-spacing="2">{svg.esc(label)}</text></g>'
-            )
+            block_lines.append((label, [zh_prof], label_fs, 2.))
+        name_group, sizes = fitted_block(block_lines,
+                                         (inner_left, name_top, name_w, inner_bottom - name_top),
+                                         gap=12, minimum=14, color=fill)
+        name_fs = sizes[0]
+        label_fs = sizes[-1] if label else 0.
 
         svg_doc = (
             svg.svg_root(width=_SIDE, height=_SIDE, view_box_tuple=_VIEW_BOX)
-            + frame + star_svg + name_group + label_group
+            + frame + star_svg + name_group
             + "</svg>"
         )
 

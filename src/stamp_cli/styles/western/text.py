@@ -32,10 +32,11 @@ from ..base import ParamSpec, StyleMeta, StyleResult
 from ...core import colors as colors_mod
 from ...core import svg
 from ...core.fonts import default_resolver
+from ...core.text import fitted_block, weighted_font
 
 # Style schema version. Bump when geometry/defaults change in a way that would
 # alter golden-hash output.
-_VERSION = "1"
+_VERSION = "2"
 
 # Fixed canvas. 360×200 (aspect 1.8) is a comfortable office-stamp rectangle;
 # physical size ~38×21 mm at the canonical scale below.
@@ -102,54 +103,6 @@ def _line_font_size(text: str, *, first: bool) -> int:
     if n <= 30:
         return 19
     return 16
-
-
-def _is_wide(ch: str) -> bool:
-    """True for full-width glyphs (CJK, fullwidth forms) that advance ~1em.
-
-    Covers the CJK ideograph blocks, CJK punctuation / fullwidth range, and
-    Hiragana/Katakana — everything that, unlike Latin, takes a whole em of width
-    and so must shrink the per-line size estimate accordingly.
-    """
-    o = ord(ch)
-    return (
-        0x1100 <= o <= 0x115F        # Hangul Jamo
-        or 0x2E80 <= o <= 0xA4CF     # CJK radicals … Yi (incl. ideographs, kana)
-        or 0xAC00 <= o <= 0xD7A3     # Hangul syllables
-        or 0xF900 <= o <= 0xFAFF     # CJK compat ideographs
-        or 0xFE30 <= o <= 0xFE4F     # CJK compat forms
-        or 0xFF00 <= o <= 0xFF60     # fullwidth forms
-        or 0xFFE0 <= o <= 0xFFE6     # fullwidth signs
-    )
-
-
-def _est_width(text: str, size: float) -> float:
-    """Estimate the rendered advance width of ``text`` at ``size`` (px units).
-
-    Full-width glyphs count ~1.0em; Latin/ASCII in a bold serif averages ~0.64em
-    (measured against Times Bold — 0.58 under-estimated and let long lines clip).
-    Plus the 0.5px letter-spacing applied between clusters.
-    """
-    if not text:
-        return 0.0
-    width = sum((1.0 if _is_wide(ch) else 0.64) * size for ch in text)
-    width += 0.5 * (len(text) - 1)  # letter-spacing between clusters
-    return width
-
-
-def _fit_width(text: str, size: int, usable_w: float) -> int:
-    """Largest size ≤ ``size`` whose estimated width fits ``usable_w``.
-
-    Shrinks down to a floor of 10, then — so an over-long line can never clip —
-    drops below the floor if even size 10 overflows (a very long single line just
-    gets small rather than running off both edges).
-    """
-    s = size
-    while s > 10 and _est_width(text, s) > usable_w:
-        s -= 1
-    while s > 4 and _est_width(text, s) > usable_w:
-        s -= 1  # hard overflow guard below the soft floor
-    return s
 
 
 class _WesternText:
@@ -249,8 +202,8 @@ class _WesternText:
         # Latin face is the primary family; the CJK face is pinned as a fallback
         # so Chinese glyphs shape under skip_system_fonts (resvg falls back across
         # every file in font_files). Mirrors hk.oval's Symbols + Symbols2 pin.
-        latin_prof = default_resolver.resolve(str(p["font"]))
-        zh_prof = default_resolver.resolve(str(p["zh_font"]))
+        latin_prof = weighted_font(default_resolver.resolve(str(p["font"])), weight)
+        zh_prof = weighted_font(default_resolver.resolve(str(p["zh_font"])), weight)
         fonts_used = [latin_prof, zh_prof]
         latin_family = latin_prof.family
 
@@ -268,7 +221,7 @@ class _WesternText:
         # second inner outline 6 units in. Stroke widths scale with the canvas.
         sw_outer = 5.0
         rx_outer = 16.0
-        inset = 4.0  # outer rect inset from the viewBox edge
+        inset = 8.0  # even transparent breathing room around the outer stroke
         ox, oy = inset, inset
         ow, oh = _W - 2 * inset, _H - 2 * inset
         border = (
@@ -299,44 +252,13 @@ class _WesternText:
         usable_h = _H - 2 * v_inset
         usable_w = _W - 2 * h_inset
 
-        # Per line: pick a base size by length, then shrink it to fit the width
-        # (CJK glyphs are full-width, so this is what keeps a Chinese company name
-        # inside the border). First line stays largest.
-        sizes = [
-            _fit_width(ln, _line_font_size(ln, first=(i == 0)), usable_w)
-            for i, ln in enumerate(lines)
-        ]
-        leading = 1.18
-        line_heights = [s * leading for s in sizes]
-        block_h = sum(line_heights)
-
-        # If the stacked block is taller than the usable height, scale all sizes
-        # down uniformly so it fits (deterministic: round to int after scaling).
-        if block_h > usable_h and block_h > 0:
-            scale = usable_h / block_h
-            sizes = [max(10, int(s * scale)) for s in sizes]
-            line_heights = [s * leading for s in sizes]
-            block_h = sum(line_heights)
-
-        # Baselines: center the block, then place each line's baseline at the
-        # vertical center of its line box.
-        block_top = usable_top + (usable_h - block_h) / 2.0
-        tspans = ""
-        cursor = block_top
-        for ln, sz, lh in zip(lines, sizes, line_heights):
-            baseline = cursor + lh / 2.0
-            tspans += (
-                f'<tspan font-size="{n(sz)}" x="{n(_CX)}" y="{n(baseline)}">'
-                f'{svg.esc(ln)}</tspan>'
-            )
-            cursor += lh
-
-        text_group = (
-            f'<g font-family="{svg.esc_attr(latin_family)}" '
-            f'font-weight="{weight}" fill="{fill}">'
-            f'<text font-size="0" letter-spacing="0.5" text-anchor="middle" '
-            f'dominant-baseline="central">{tspans}</text></g>'
-        )
+        # Centre the complete visible block; use actual glyph widths for wide
+        # capitals, punctuation, mixed scripts and multiline content.
+        block_lines = [(line, fonts_used, _line_font_size(line, first=(i == 0)), .5)
+                       for i, line in enumerate(lines)]
+        text_group, sizes = fitted_block(block_lines,
+                                         (h_inset, usable_top, usable_w, usable_h),
+                                         gap=12, minimum=12, color=fill)
 
         svg_doc = (
             svg.svg_root(width=_W, height=_H, view_box_tuple=_VIEW_BOX)
