@@ -1,0 +1,35 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Editor / harness scratch
+.claude/
+
+# Spike: font binaries (fetched, not vendored) + intermediate renders
+spike/fonts/
+spike/oval.svg
+spike/oval_resvg.png
+
+# pytest
+.pytest_cache/
+
+.DS_Store
+
+# Local configuration and private inputs
+.env
+.env.*
+!.env.example
+.local/
+
+# Locally generated stamps, signatures, and documents
+output/
+outputs/
+signatures/
+documents/

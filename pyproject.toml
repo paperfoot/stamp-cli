@@ -1,0 +1,32 @@
+[project]
+name = "stamp-cli"
+version = "0.3.0"
+description = "Generate Chinese, Hong Kong, and Western-style stamps (round seals, name chops, sign chops, rectangular stamps) with Unicode support, custom colors, fonts, and transparent backgrounds."
+readme = "README.md"
+authors = [{ name = "Paperfoot" }]
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.5.0,<9",
+    "pillow>=12.3.0,<13",
+    "resvg-py>=0.5.0,<0.6",
+    # Read a font file's real OpenType family name (and probe glyph coverage).
+    # resvg matches on that family under skip_system_fonts, so path/fc-match
+    # font resolution is unreliable without it.
+    "fonttools>=4.65.0,<5",
+]
+keywords = ["stamp", "seal", "chop", "chinese", "hong-kong", "印章", "图章", "cli"]
+
+[project.scripts]
+stamp = "stamp_cli.cli:cli"
+stamp-cli = "stamp_cli.cli:cli"
+
+[build-system]
+requires = ["uv_build>=0.12.13,<0.13"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10",
+]
