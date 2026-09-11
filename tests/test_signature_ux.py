@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner
-from PIL import Image, ImageDraw, PngImagePlugin
+from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 
 from stamp_cli.core import raster
 from stamp_cli.styles.esign import signature as signature_mod
@@ -339,9 +339,21 @@ def test_sign_rejects_invalid_xml_characters(tmp_path):
     assert "invalid xml characters" in error["error"].lower()
 
 
-def test_moderate_fifty_character_typed_name_uses_glyph_bounds_without_clipping():
-    name = "Alexandra Morgan-Wellington Jordan Lee Fairchild I"
-    assert len(name) == 50
+@pytest.mark.parametrize("name", [
+    "Alex Morgan",
+    "Alexandra Morgan-Wellington Jordan Lee Fairchild I",
+    "W" * 160,
+])
+def test_typed_names_fit_or_report_font_specific_legibility_limit(name):
+    # Script faces differ across platforms. Names that fit at the minimum
+    # must render; wider names must be refused instead of clipped or condensed.
+    profile = signature_mod.default_resolver.resolve("script")
+    face = ImageFont.truetype(profile.file_path, 18 * 4, index=profile.face_index)
+    left, top, right, bottom = face.getbbox(name, anchor="ls")
+    if right - left > 384 * 4 or bottom - top > 116 * 4:
+        with pytest.raises(ValueError, match="too long to fit legibly"):
+            STYLE.build_svg(signature="typed", name=name, layout="signature-only")
+        return
     result = STYLE.build_svg(signature="typed", name=name, layout="signature-only")
 
     left, top, right, bottom = _render_alpha_bbox(result)
