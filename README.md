@@ -1,197 +1,112 @@
-# stamp
+# Stamp CLI — signature graphics and company seals
 
-Create signature graphics, company seals, personal chops, and office stamps as
-physically sized SVG and print-ready PNG files. The catalog contains 14 base
-styles for Hong Kong, mainland China, personal marks, Western office stamps,
-and signatures. These are graphic templates; the tool does not register or certify a seal.
+Create signature graphics, bilingual company seals, personal name chops, and office stamps from the terminal. Export transparent PNGs and physically sized SVGs for contracts, proposals, stationery, and document templates.
 
-![Framed signature example](examples/esign-signature.png)
+Made by **Boris Djordjevic** at [**Paperfoot**](https://github.com/paperfoot). Free, open source, and rendered locally.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/paperfoot/stamp-cli/v0.3.2/examples/esign-signature.png" width="560" alt="Framed signature graphic for fictional signer Alex Morgan, with a content fingerprint underneath">
+</p>
 
 ## Install
 
-Install the tagged release with [uv's tool installer](https://docs.astral.sh/uv/guides/tools/):
+**Homebrew** — installs the command and its runtime:
 
 ```bash
-uv tool install 'git+https://github.com/paperfoot/stamp-cli@v0.3.1'
+brew install paperfoot/tap/stamp-cli
 stamp --help
 ```
 
-This installs both `stamp` and `stamp-cli`. To work from source:
+**[uv](https://docs.astral.sh/uv/getting-started/installation/)** — install the published wheel in an isolated environment:
 
 ```bash
-git clone https://github.com/paperfoot/stamp-cli.git
-cd stamp-cli
-uv sync
-uv run python -m pytest
+uv tool install --python 3.14 https://github.com/paperfoot/stamp-cli/releases/download/v0.3.2/stamp_cli-0.3.2-py3-none-any.whl
 ```
 
-## Signatures
+Both install `stamp` and `stamp-cli`. Tested on macOS and Linux with Python 3.12 and 3.14. For fonts, platform setup, and upgrade commands, see [installation](https://github.com/paperfoot/stamp-cli/blob/main/docs/install.md).
 
-The short command creates a typed signature in the classic framed layout
-and shows its reference by default:
+## Make your first signature
 
 ```bash
 stamp sign --name 'Alex Morgan' -o signature.png
 ```
 
-Use a scan or photograph by passing its path. Blank surrounding pixels and
-white paper are removed. Every layout grows when the remaining ink is tall,
-within a bounded height, while preserving its aspect ratio:
+Prefer a quieter layout? Hide the reference, change the ink, or keep only the signature:
 
 ```bash
-stamp sign --name 'Alex Morgan' --signature ./signature-scan.png -o signature.png
-```
-
-Two quieter compositions are available:
-
-```bash
-stamp sign --name 'Alex Morgan' --layout clean --no-show-id --color '#242A30' -o signature.png
+stamp sign --name 'Alex Morgan' --layout clean --no-show-id --color '#242A30' -o clean.png
 stamp sign --name 'Alex Morgan' --layout signature-only -o signature.svg
 ```
 
-`--show-id` and `--no-show-id` control whether the 32-character hexadecimal
-reference is drawn. The computed reference stays in the file metadata either
-way. It is a content fingerprint for the generated graphic. It is not proof of
-identity, consent, signing time, authentication, or a digital certificate, and
-the tool makes no guarantee about the legal effect of a signature.
+Use your own scan with `--signature ./signature-scan.png`. Stamp removes white paper and crops surrounding blank space, then fits the visible ink without stretching it. Tall signatures get additional height within the layout's limits.
 
-PNG export removes the source path, EXIF, color profile, and other source image
-metadata. Its application metadata contains only the stamp style and optional
-reference. Text supplied on the command line remains visible in the finished
-graphic, as expected.
+## Company seals and office stamps
 
-## Browse and generate
+<table>
+  <tr>
+    <th>Bilingual company seal</th>
+    <th>Office stamp</th>
+    <th>Personal name chop</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/paperfoot/stamp-cli/v0.3.2/examples/hk-circle.png" width="230" alt="Red circular seal for Example Company Limited, with English around the ring and Chinese in the centre"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/paperfoot/stamp-cli/v0.3.2/examples/western-text.png" width="230" alt="Red rectangular APPROVED office stamp"></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/paperfoot/stamp-cli/v0.3.2/examples/personal-name_chop.png" width="150" alt="Square red Chinese personal name chop using a fictional sample name"></td>
+  </tr>
+</table>
 
-Search the catalog or build an offline gallery of synthetic examples:
+All examples use fictional names and companies.
 
 ```bash
-stamp list signature
-stamp list --json
+# Bilingual circular seal with independent English and Chinese tracking
+stamp hk circle --en 'EXAMPLE COMPANY LIMITED' --zh-line1 '示例有限公司' \
+  --en-spacing 2 --zh-spacing 1.5 --no-star -o company-seal.png
+
+# A 38 mm office stamp, exported at 600 DPI
+stamp western text --preset APPROVED --width-mm 38 --dpi 600 -o approved.png
+
+# Browse all 14 styles in an offline gallery
 stamp preview --open
 ```
 
-The 14 base styles are:
+The catalog covers Hong Kong round, oval, and rectangular seals; mainland Chinese company and department seals; personal chops; Western text stamps; and three signature layouts. Run `stamp list` to see them all.
 
-- `esign.signature`
-- `hk.circle`, `hk.oval`, `hk.rect`
-- `personal.name_chop`
-- `prc.company_round`, `prc.contract`, `prc.department_round`, `prc.finance`
-- `prc.foreign_invested_oval`, `prc.invoice`, `prc.legal_rep`, `prc.state_owned_round`
-- `western.text`
+## Control the details
 
-Each style also has a human-oriented nested command, such as `stamp hk oval`
-or `stamp western text`. Agents can use the registry-generated schema:
+- **Measured typography.** Circular text sits between the rings using visible glyph bounds. English and Chinese tracking are independent, and long text fits within the available space or returns a clear error.
+- **Print sizing.** Set width in millimetres, resolution in DPI, or an exact PNG pixel width. PNG defaults to 300 DPI; SVG retains vector geometry.
+- **Consistent exports.** Transparent or solid backgrounds, custom ink colours, and optional seeded wear work across PNG and SVG. Existing files are protected unless you pass `--force`.
+- **Local rendering.** No account or upload is needed to create a graphic. Font downloads are explicit. Imported PNG source paths, EXIF, and colour profiles are removed from the export.
+- **Scriptable commands.** JSON output, schema discovery, input validation, and documented exit codes support batch jobs and agent workflows.
+
+PNG preserves the rendered appearance across devices. SVG text needs the same fonts on the viewing or conversion system. See the [usage guide](https://github.com/paperfoot/stamp-cli/blob/main/docs/usage.md) for font selection, output flags, spacing controls, and troubleshooting.
+
+## Automate document graphics
 
 ```bash
 stamp agent-info --json
-stamp generate --style hk.oval --params params.json -o company-seal
 stamp validate --style hk.oval --params params.json --json
+stamp generate --style hk.oval --params params.json -o company-seal --json
+stamp inspect company-seal.png --json
 ```
 
-Unknown parameters, invalid types, and missing required values are reported as
-errors. `agent-info` is generated from the same style definitions used by the
-CLI, so its parameter schema and defaults stay aligned with rendering.
+`agent-info` exposes the same parameter definitions and defaults that drive the renderer. `inspect` reports the exact file's SHA-256; `verify` compares it with a checksum you recorded separately.
 
-## Seal typography
+## What the signature reference means
 
-Circular and oval company seals center the visible letter shapes between their
-rings. English follows a measured arc without squeezing letters horizontally;
-Chinese lines fit inside the actual inner circle or ellipse.
+The optional 32-character reference is a fingerprint of the generated graphic. It is **not a digital signature certificate** and does not establish identity, consent, or signing time. Stamp creates visual assets; it does not cryptographically sign PDFs, register company seals, or certify their legal validity.
 
-Control tracking independently for English and Chinese:
+## Develop and contribute
 
 ```bash
-stamp hk circle --en 'EXAMPLE COMPANY LIMITED' --zh-line1 '示例有限公司' \
-  --en-spacing 2 --zh-spacing 1.5 --no-star -o company-seal.png
+git clone https://github.com/paperfoot/stamp-cli.git
+cd stamp-cli
+uv sync --frozen
+uv run python -m pytest -q
 ```
 
-`--en-spacing` defaults to 1.5 and `--zh-spacing` to 1. Both accept 0–12;
-zero explicitly removes added tracking. At the default 42 mm circular size,
-one unit is 0.1 mm. An optional `--en-bottom-spacing` sets the circular seal's
-lower English arc separately; otherwise it inherits `--en-spacing`.
-
-`--en-size` and `--zh-size` set maximum font sizes. Text reduces only as needed
-to fit; inputs that cannot remain legible produce an actionable error. A
-center star reserves its own space, including clearance to the Chinese lines.
-
-## Export controls
-
-Every render command supports the same output controls:
-
-| Option | Behaviour |
-| --- | --- |
-| `-o, --output PATH` | `.svg` or `.png` selects one format; no extension selects both. |
-| `--format svg\|png\|both` | Explicitly selects output format. |
-| `--width-mm N` | Sets printed width while preserving the style's proportions. |
-| `--dpi N` | Sets PNG print resolution; the default is 300 DPI. |
-| `--size N` | Sets PNG width in pixels instead of DPI. |
-| `--bg COLOR` | Applies the same background to SVG and PNG. |
-| `--weathered --seed N` | Applies reproducible wear with the same pattern in SVG and PNG. |
-| `--force` | Allows replacement; existing outputs are protected by default. |
-| `--open` | Opens the saved result in the default viewer. |
-| `--stdout` | Writes one artifact to standard output. |
-| `--json` | Emits a machine-readable result or error. |
-
-`--dpi` and `--size` are mutually exclusive. When binary output and `--json`
-are used together, the artifact goes to stdout and JSON metadata or errors go
-to stderr.
-
-PNG is the reliable choice when typography must look the same on another
-device. SVG retains vector geometry but its text requires the same font files
-on the viewing or conversion system.
-
-## Inspect and verify
-
-Inspect reports the embedded reference and the exact file checksum:
-
-```bash
-stamp inspect signature.png
-stamp inspect signature.png --json
-```
-
-Record that SHA-256 somewhere separate, then compare the file later:
-
-```bash
-stamp verify signature.png --sha256 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-```
-
-Replace the example value with the original 64-character checksum from your
-separate record. A match means the file bytes have not changed since that
-checksum was calculated. It does not authenticate a signer or establish the
-origin of a file.
-
-## Fonts and diagnostics
-
-Styles expose `--font`, `--zh-font`, or `--script-font` where relevant. These
-accept a documented alias or a font-file path. Inspect available aliases and
-run the offline health check with:
-
-```bash
-stamp fonts
-stamp doctor
-```
-
-Inspection and diagnostic commands do not download fonts. If the optional Noto
-symbol fonts are missing, fetch their OFL-licensed copies explicitly:
-
-```bash
-stamp fonts --fetch
-```
-
-Signatures, Hong Kong seals, and personal name chops use measured glyph bounds from
-[Pillow `ImageFont.getbbox`](https://pillow.readthedocs.io/en/stable/reference/ImageFont.html#PIL.ImageFont.FreeTypeFont.getbbox)
-to fit variable text. PNG export writes print resolution using Pillow's documented
-[PNG `dpi` option](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#png).
-
-## Errors and automation
-
-The process exits with `0` on success, `1` for invalid input or a checksum
-mismatch, `2` when a required font/runtime resource is missing, `3` when PNG
-rasterization is unavailable, and `4` for file I/O failures. With `--json`,
-errors include the same exit code in a JSON envelope.
+Bug reports with reproducible commands, synthetic examples, and platform/font details are welcome in [Issues](https://github.com/paperfoot/stamp-cli/issues). Please use fictional names and never attach a real signature, private seal, or confidential document.
 
 ## License
 
-The application code is MIT licensed. Fonts remain under their own licenses;
-the optional Noto symbol fonts fetched by `stamp fonts --fetch` use the SIL Open
-Font License and are not relicensed by this project's MIT license.
+[MIT](https://github.com/paperfoot/stamp-cli/blob/main/LICENSE). Fonts retain their own licences. Optional Noto symbol fonts use the SIL Open Font License; see the [font documentation](https://github.com/paperfoot/stamp-cli/blob/main/docs/usage.md#fonts-and-diagnostics).

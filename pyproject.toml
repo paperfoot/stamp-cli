@@ -1,9 +1,9 @@
 [project]
 name = "stamp-cli"
-version = "0.3.1"
-description = "Generate Chinese, Hong Kong, and Western-style stamps (round seals, name chops, sign chops, rectangular stamps) with Unicode support, custom colors, fonts, and transparent backgrounds."
+version = "0.3.2"
+description = "Create signature graphics, bilingual company seals, and office stamps as print-ready PNG and SVG files."
 readme = "README.md"
-authors = [{ name = "Paperfoot" }]
+authors = [{ name = "Boris Djordjevic" }, { name = "Paperfoot" }]
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
@@ -16,7 +16,27 @@ dependencies = [
     # font resolution is unreliable without it.
     "fonttools>=4.65.0,<5",
 ]
-keywords = ["stamp", "seal", "chop", "chinese", "hong-kong", "印章", "图章", "cli"]
+keywords = ["signature-generator", "stamp-generator", "company-seal", "png", "svg", "chinese", "hong-kong", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Multimedia :: Graphics",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/paperfoot/stamp-cli"
+Repository = "https://github.com/paperfoot/stamp-cli"
+Documentation = "https://github.com/paperfoot/stamp-cli/blob/main/docs/usage.md"
+Issues = "https://github.com/paperfoot/stamp-cli/issues"
+Changelog = "https://github.com/paperfoot/stamp-cli/releases"
 
 [project.scripts]
 stamp = "stamp_cli.cli:cli"
