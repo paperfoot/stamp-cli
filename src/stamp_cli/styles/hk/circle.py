@@ -81,9 +81,9 @@ class _HkCircle:
                  "(default 46).",
         ),
         ParamSpec(
-            name="en_font", type=str, default="symbols",
-            help="Font alias for the English + floret text (default Noto Sans "
-                 "Symbols).",
+            name="en_font", type=str, default="sans",
+            help="Font alias for the English text (default a system sans-serif; "
+                 "symbol font resolved separately).",
         ),
         ParamSpec(
             name="zh_font", type=str, default="song",
@@ -120,7 +120,7 @@ class _HkCircle:
         "color": "red",
         "weight": 700,
         "font_size": _DEFAULT_EN_FS,
-        "en_font": "symbols",
+        "en_font": "sans",
         "zh_font": "song",
         "en_size": 0,
         "en_spacing": None,

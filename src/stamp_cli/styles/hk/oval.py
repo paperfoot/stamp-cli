@@ -58,9 +58,9 @@ class _HkOval:
                  "default 700).",
         ),
         ParamSpec(
-            name="en_font", type=str, default="symbols",
-            help="Font alias for the English + floret text (default Noto Sans "
-                 "Symbols).",
+            name="en_font", type=str, default="sans",
+            help="Font alias for the English text (default a system sans-serif; "
+                 "symbol font resolved separately).",
         ),
         ParamSpec(
             name="zh_font", type=str, default="song",
@@ -76,7 +76,7 @@ class _HkOval:
         "star_glyph": _DEFAULT_STAR,
         "color": "red",
         "weight": 700,
-        "en_font": "symbols",
+        "en_font": "sans",
         "zh_font": "song",
     }
 
